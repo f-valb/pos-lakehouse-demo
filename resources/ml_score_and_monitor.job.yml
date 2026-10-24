@@ -1,0 +1,63 @@
+resources:
+  jobs:
+    ml_score_and_monitor:
+      name: pos-ml-score-monitor-${var.env}
+      description: >
+        Daily: build today's features, batch-score churn + forecast with the @champion models, run drift
+        and data-quality checks. If drift is detected, trigger ml_train for the drifted countries.
+      tags: {component: ml, cost_center: retail-data}
+      schedule:
+        quartz_cron_expression: "0 30 2 * * ?"
+        timezone_id: UTC
+        pause_status: ${var.pause_status}
+      parameters:
+        - name: countries_json
+          default: ${var.countries_json}
+        - name: inject_drift
+          default: ""
+      environments:
+        - environment_key: ml
+          spec: {client: "4", dependencies: ["mlflow>=3.1,<4", "scikit-learn>=1.5,<1.8"]}
+      email_notifications:
+        on_failure: ["${var.alert_email}"]
+      tasks:
+        - task_key: score_features
+          for_each_task:
+            inputs: "{{job.parameters.countries_json}}"
+            concurrency: 2
+            task:
+              task_key: score_features_country
+              environment_key: ml
+              notebook_task:
+                notebook_path: ../ml/02_build_features.py
+                base_parameters: {env: "${var.env}", country: "{{input}}", mode: score,
+                                  inject_drift: "{{job.parameters.inject_drift}}"}
+        - task_key: batch_score
+          depends_on: [{task_key: score_features}]
+          for_each_task:
+            inputs: "{{job.parameters.countries_json}}"
+            concurrency: 2
+            task:
+              task_key: batch_score_country
+              environment_key: ml
+              notebook_task:
+                notebook_path: ../ml/05_batch_score.py
+                base_parameters: {env: "${var.env}", country: "{{input}}"}
+        - task_key: monitor
+          depends_on: [{task_key: batch_score}]
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../ml/06_monitor.py
+            base_parameters: {env: "${var.env}", countries: "${var.countries}"}
+        - task_key: drift_detected
+          depends_on: [{task_key: monitor}]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.monitor.values.drift_detected}}"
+            right: "true"
+        - task_key: retrain_drifted
+          depends_on: [{task_key: drift_detected, outcome: "true"}]
+          run_job_task:
+            job_id: ${resources.jobs.ml_train.id}
+            job_parameters:
+              countries_json: "{{tasks.monitor.values.drift_countries}}"

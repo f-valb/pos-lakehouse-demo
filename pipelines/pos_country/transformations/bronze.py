@@ -20,7 +20,9 @@ LANDING = spark.conf.get("pos.landing_path")
     name=f"{CAT}.{ENV}_bronze.pos_lines_raw",
     comment="Raw legacy POS lines, one row per line per pull. Append-only.",
     cluster_by=["_window_start"],
-    table_properties={"delta.enableRowTracking": "true", "pipelines.reset.allowed": "false"},
+    # Bronze is the only copy of what the API returned: a full refresh must never wipe it in prod.
+    table_properties={"delta.enableRowTracking": "true",
+                      "pipelines.reset.allowed": "false" if ENV == "prod" else "true"},
 )
 def pos_lines_raw():
     return (

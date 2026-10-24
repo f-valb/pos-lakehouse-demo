@@ -9,6 +9,10 @@ idempotent). Realism comes from what *does* change over time, as in a real POS s
 * Legacy bugs: ~0.5% of lines are emitted twice in one response; ~0.3% are malformed
   (missing store, garbage qty, impossible date, unknown tender code, negative price).
 * Traffic follows a per-country local-time curve (lunch and evening peaks).
+* Loyalty customers buy at the rate of their shared profile (common/customers.py), the same
+  profiles the ML history uses, so churned customers never appear in the live stream. The
+  loyalty share of transactions is therefore small in the demo; with a realistic member base
+  (millions) it would be ~60%.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 from faker import Faker
 
+from common.customers import HISTORY_DAYS, STORE_WEEKEND_FACTOR, WEEKEND_FACTOR, profiles
 from common.regions import LEGACY_COLUMNS, REGIONS, Region
 
 N_SKUS = 500
@@ -30,7 +35,6 @@ AVG_LINES_PER_TXN = 2.5
 VOID_RATE = 0.02
 BAD_ROW_RATE = 0.003
 DUP_LINE_RATE = 0.005
-LOYALTY_RATE = 0.6
 EXPOSE_DELAY_S = 20  # the legacy system only exposes sales once they are ~20s old
 
 TENDER_MIX = {  # probability of codes 01..04 per country
@@ -100,7 +104,7 @@ class LegacyLine:
 
 def lines_per_minute(region: Region, minute_start_utc: datetime, total_rpm: int) -> int:
     local = minute_start_utc.astimezone(ZoneInfo(region.tz))
-    mult = traffic_multiplier(local.hour + local.minute / 60)
+    mult = traffic_multiplier(local.hour + local.minute / 60) * (STORE_WEEKEND_FACTOR if local.weekday() >= 5 else 1.0)
     return max(1, int(total_rpm * region.traffic_share * mult))
 
 
@@ -124,9 +128,23 @@ def generate_minute(region_code: str, minute_epoch: int, total_rpm: int) -> tupl
     regs = rng.integers(1, r.registers_per_store + 1, n_txn)
     secs = np.sort(rng.uniform(0, 60, n_txn))
     n_lines = rng.integers(1, 5, n_txn)
-    has_loyalty = rng.random(n_txn) < LOYALTY_RATE
-    cust = rng.integers(0, r.customers, n_txn)
     tender = rng.choice(["01", "02", "03", "04"], n_txn, p=TENDER_MIX[region_code])
+    # Loyalty: expected visits this minute per customer = today's profile rate spread over the day
+    # along the same traffic curve. Today is day HISTORY_DAYS of the shared profiles.
+    prof = profiles(region_code)
+    local = minute_start.astimezone(tz)
+    per_min = prof.activity(HISTORY_DAYS) * (WEEKEND_FACTOR if local.weekday() >= 5 else 1.0) / 1440
+    per_min = per_min * traffic_multiplier(local.hour + local.minute / 60)
+    k = min(int(rng.poisson(per_min.sum())), n_txn)
+    has_loyalty = np.zeros(n_txn, bool)
+    cust = np.zeros(n_txn, int)
+    if k:
+        slots = rng.choice(n_txn, k, replace=False)
+        has_loyalty[slots] = True
+        cust[slots] = rng.choice(len(per_min), k, p=per_min / per_min.sum())
+        u = rng.random(k)
+        cp, ep = prof.card_pref[cust[slots]], prof.ewallet_pref[cust[slots]]
+        tender[slots] = np.where(u < cp, "02", np.where(u < cp + (1 - cp) * ep, "03", "01"))
     is_return = rng.random(n_txn) < 0.03
     voided = rng.random(n_txn) < VOID_RATE
     void_delay = rng.integers(180, 1200, n_txn)

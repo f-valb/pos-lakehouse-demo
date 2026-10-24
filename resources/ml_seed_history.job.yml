@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    ml_seed_history:
+      name: pos-ml-seed-history-${var.env}
+      description: One-off. Seeds SIMULATED 180-day history for churn labels and seasonality (demo only).
+      tags: {component: ml, cost_center: retail-data}
+      environments:
+        - environment_key: ml
+          spec: {client: "4", dependencies: ["mlflow>=3.1,<4", "scikit-learn>=1.5,<1.8"]}
+      tasks:
+        - task_key: seed
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../ml/01_seed_history.py
+            base_parameters: {env: "${var.env}", countries: "${var.countries}"}

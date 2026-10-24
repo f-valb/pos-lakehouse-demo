@@ -1,0 +1,25 @@
+resources:
+  jobs:
+    ml_rollback:
+      name: pos-ml-rollback-${var.env}
+      description: >
+        Move @champion back to the version recorded in the current champion's previous_champion tag.
+        Batch scoring picks it up on the next run. No retraining, no redeploy.
+      tags: {component: ml, cost_center: retail-data}
+      parameters:
+        - name: country
+          default: ph
+        - name: model
+          default: churn_model
+      environments:
+        - environment_key: ml
+          spec: {client: "4", dependencies: ["mlflow>=3.1,<4", "scikit-learn>=1.5,<1.8"]}
+      tasks:
+        - task_key: rollback
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../ml/07_rollback.py
+            base_parameters:
+              env: ${var.env}
+              country: "{{job.parameters.country}}"
+              model: "{{job.parameters.model}}"

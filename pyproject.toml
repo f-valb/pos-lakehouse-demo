@@ -40,7 +40,7 @@ ignore = ["E501", "B008"]
 [tool.ruff.lint.per-file-ignores]
 # Databricks notebooks / pipeline sources get `spark` and `dbutils` injected at runtime.
 "pipelines/**/transformations/*.py" = ["F821"]
-"ml/*.py" = ["F821"]
+"ml/*.py" = ["F821", "E402"]  # notebooks: widgets cell before imports
 "governance/*.py" = ["F821"]
 "finops/*.py" = ["F821"]
 

@@ -25,6 +25,9 @@ variables:
     default: UNPAUSED
   countries:
     default: ph,sg,de,us
+  countries_json:
+    description: Same list as JSON, for for_each tasks
+    default: '["ph","sg","de","us"]'
   alert_email:
     description: Where data-quality / drift / freshness alerts go
     default: ${workspace.current_user.userName}
@@ -49,6 +52,7 @@ targets:
     variables:
       env: staging
       pause_status: PAUSED # staging runs on demand from CI integration tests
+      alert_pause_status: PAUSED
     presets:
       tags:
         env: staging
@@ -64,6 +68,7 @@ targets:
     variables:
       env: prod
       pause_status: PAUSED # demo: keep prod idle to stay cheap; set UNPAUSED for a real rollout
+      alert_pause_status: PAUSED
     presets:
       tags:
         env: prod

@@ -1,0 +1,48 @@
+# Per-country ML jobs. for_each = one model per country, trained on that country's data. Batch only.
+resources:
+  jobs:
+    ml_train:
+      name: pos-ml-train-${var.env}
+      description: Per-country training of churn + many-models demand forecast, with champion/challenger gate.
+      tags: {component: ml, cost_center: retail-data}
+      parameters:
+        - name: countries_json
+          default: ${var.countries_json}
+      environments:
+        - environment_key: ml
+          spec: {client: "4", dependencies: ["mlflow>=3.1,<4", "scikit-learn>=1.5,<1.8"]}
+      email_notifications:
+        on_failure: ["${var.alert_email}"]
+      tasks:
+        - task_key: train_features
+          for_each_task:
+            inputs: "{{job.parameters.countries_json}}"
+            concurrency: 2
+            task:
+              task_key: train_features_country
+              environment_key: ml
+              notebook_task:
+                notebook_path: ../ml/02_build_features.py
+                base_parameters: {env: "${var.env}", country: "{{input}}", mode: train}
+        - task_key: train_churn
+          depends_on: [{task_key: train_features}]
+          for_each_task:
+            inputs: "{{job.parameters.countries_json}}"
+            concurrency: 2
+            task:
+              task_key: train_churn_country
+              environment_key: ml
+              notebook_task:
+                notebook_path: ../ml/03_train_churn.py
+                base_parameters: {env: "${var.env}", country: "{{input}}"}
+        - task_key: train_forecast
+          depends_on: [{task_key: train_features}]
+          for_each_task:
+            inputs: "{{job.parameters.countries_json}}"
+            concurrency: 2
+            task:
+              task_key: train_forecast_country
+              environment_key: ml
+              notebook_task:
+                notebook_path: ../ml/04_train_forecast.py
+                base_parameters: {env: "${var.env}", country: "{{input}}"}
