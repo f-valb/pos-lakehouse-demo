@@ -1,0 +1,16 @@
+# Local stand-in for the AWS side: S3 (per-country buckets), SQS (live/backfill/DLQ),
+# CloudWatch (metrics + alarms), SNS (alarm topic). The real thing is in infra/terraform/aws.
+services:
+  localstack:
+    image: localstack/localstack:4.9.2
+    container_name: pos-localstack
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      SERVICES: s3,sqs,cloudwatch,sns,events,scheduler
+      PERSISTENCE: "0"
+    volumes:
+      - localstack-data:/var/lib/localstack
+
+volumes:
+  localstack-data:
