@@ -1,0 +1,54 @@
+[project]
+name = "pos-lakehouse-demo"
+version = "0.1.0"
+description = "Scaled-down POS-to-lakehouse demo: fragile legacy API -> S3 -> Lakeflow medallion -> BI/ML on Databricks"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "httpx>=0.27",
+    "faker>=30",
+    "pyarrow>=17",
+    "boto3>=1.35",
+    "databricks-sdk>=0.50",
+    "pandas>=2.2",
+    "numpy>=1.26",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.7",
+    "pyspark==3.5.3",
+    "delta-spark==3.2.1",
+    "scikit-learn>=1.5",
+    "mlflow-skinny>=2.17",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = [".databricks", ".claude", "infra"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Databricks notebooks / pipeline sources get `spark` and `dbutils` injected at runtime.
+"pipelines/transformations/*.py" = ["F821"]
+"ml/*.py" = ["F821"]
+"governance/*.py" = ["F821"]
+"finops/*.py" = ["F821"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: needs LocalStack / mock API / Databricks (run with -m integration)",
+    "spark: needs a local Spark + Java runtime",
+]
+addopts = "-m 'not integration'"
+pythonpath = ["."]

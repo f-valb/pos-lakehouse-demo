@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+
+# Databricks bundle state + locally installed agent skills (reinstall with `databricks aitools install`)
+.databricks/
+.claude/skills/
+
+# Terraform
+infra/**/.terraform/
+infra/**/*.tfstate*
+infra/**/.terraform.lock.hcl
+
+# Local run artifacts
+.localdata/
+spark-warehouse/
+metastore_db/
+derby.log
+mlruns/
