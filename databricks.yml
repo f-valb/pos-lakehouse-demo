@@ -1,0 +1,72 @@
+# Databricks Asset Bundle: one bundle, three environments. "Deploy code, not models":
+# every target deploys the same pipelines/jobs; models are trained in each environment on
+# that environment's data.
+#
+# Demo: all three targets point at the same Free Edition workspace and are separated by
+# UC schema prefix (dev_ / staging_ / prod_). PROD: one workspace per environment (and per
+# country), each target with its own host and a service principal as run_as.
+bundle:
+  name: pos-lakehouse
+
+include:
+  - resources/*.yml
+
+variables:
+  env:
+    description: UC schema prefix for this environment (dev | staging | prod)
+  warehouse_id:
+    description: SQL warehouse for dashboards / alerts / SQL tasks
+    lookup:
+      warehouse: Serverless Starter Warehouse
+  refresh_cron:
+    description: Medallion refresh schedule (every 5 min = the 15-minute SLA's processing budget)
+    default: "0 0/5 * * * ?"
+  pause_status:
+    default: UNPAUSED
+  countries:
+    default: ph,sg,de,us
+  alert_email:
+    description: Where data-quality / drift / freshness alerts go
+    default: ${workspace.current_user.userName}
+
+targets:
+  dev:
+    default: true
+    mode: development # prefixes resource names with [dev <user>], pauses schedules
+    workspace:
+      profile: DEFAULT
+    variables:
+      env: dev
+    presets:
+      tags:
+        env: dev
+
+  staging:
+    mode: production
+    workspace:
+      profile: DEFAULT
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/staging
+    variables:
+      env: staging
+      pause_status: PAUSED # staging runs on demand from CI integration tests
+    presets:
+      tags:
+        env: staging
+    permissions:
+      - group_name: data_platform
+        level: CAN_MANAGE
+
+  prod:
+    mode: production
+    workspace:
+      profile: DEFAULT
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
+    variables:
+      env: prod
+      pause_status: PAUSED # demo: keep prod idle to stay cheap; set UNPAUSED for a real rollout
+    presets:
+      tags:
+        env: prod
+    permissions:
+      - group_name: data_platform
+        level: CAN_MANAGE

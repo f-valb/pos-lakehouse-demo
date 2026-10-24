@@ -1,0 +1,108 @@
+# One pipeline per country so compute and data stay in-country (prod: each in its own
+# workspace). The four country blocks are identical apart from the country code.
+resources:
+  pipelines:
+    pos_ph:
+      name: pos-ph-medallion-${var.env}
+      catalog: pos_ph
+      schema: ${var.env}_silver
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      photon: true
+      root_path: ../pipelines/pos_country
+      libraries:
+        - glob:
+            include: ../pipelines/pos_country/transformations/**
+      configuration:
+        pos.country: "PH"
+        pos.env: ${var.env}
+        pos.landing_path: /Volumes/pos_ph/${var.env}_bronze/landing/raw
+        spark.sql.session.timeZone: UTC
+      tags:
+        data_country: "PH"
+        component: medallion
+        cost_center: retail-data
+    pos_sg:
+      name: pos-sg-medallion-${var.env}
+      catalog: pos_sg
+      schema: ${var.env}_silver
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      photon: true
+      root_path: ../pipelines/pos_country
+      libraries:
+        - glob:
+            include: ../pipelines/pos_country/transformations/**
+      configuration:
+        pos.country: "SG"
+        pos.env: ${var.env}
+        pos.landing_path: /Volumes/pos_sg/${var.env}_bronze/landing/raw
+        spark.sql.session.timeZone: UTC
+      tags:
+        data_country: "SG"
+        component: medallion
+        cost_center: retail-data
+    pos_de:
+      name: pos-de-medallion-${var.env}
+      catalog: pos_de
+      schema: ${var.env}_silver
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      photon: true
+      root_path: ../pipelines/pos_country
+      libraries:
+        - glob:
+            include: ../pipelines/pos_country/transformations/**
+      configuration:
+        pos.country: "DE"
+        pos.env: ${var.env}
+        pos.landing_path: /Volumes/pos_de/${var.env}_bronze/landing/raw
+        spark.sql.session.timeZone: UTC
+      tags:
+        data_country: "DE"
+        component: medallion
+        cost_center: retail-data
+    pos_us:
+      name: pos-us-medallion-${var.env}
+      catalog: pos_us
+      schema: ${var.env}_silver
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      photon: true
+      root_path: ../pipelines/pos_country
+      libraries:
+        - glob:
+            include: ../pipelines/pos_country/transformations/**
+      configuration:
+        pos.country: "US"
+        pos.env: ${var.env}
+        pos.landing_path: /Volumes/pos_us/${var.env}_bronze/landing/raw
+        spark.sql.session.timeZone: UTC
+      tags:
+        data_country: "US"
+        component: medallion
+        cost_center: retail-data
+    pos_global:
+      name: pos-global-gold-${var.env}
+      catalog: pos_global
+      schema: ${var.env}_gold
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      photon: true
+      root_path: ../pipelines/pos_global
+      libraries:
+        - glob:
+            include: ../pipelines/pos_global/transformations/**
+      configuration:
+        pos.env: ${var.env}
+        pos.countries: ${var.countries}
+        spark.sql.session.timeZone: UTC
+      tags:
+        data_country: GLOBAL
+        component: medallion
+        cost_center: retail-data

@@ -1,0 +1,31 @@
+resources:
+  jobs:
+    medallion_refresh:
+      name: pos-medallion-refresh-${var.env}
+      description: >
+        Every 5 minutes: refresh the four country pipelines in parallel (bronze -> silver -> gold),
+        then the global aggregated layer. Budget: ~5 min poll + ~5 min process + ~5 min BI refresh.
+      max_concurrent_runs: 1 # a slow run delays the next instead of piling up
+      schedule:
+        quartz_cron_expression: ${var.refresh_cron}
+        timezone_id: UTC
+        pause_status: ${var.pause_status}
+      tags:
+        component: medallion
+        cost_center: retail-data
+      email_notifications:
+        on_failure:
+          - ${var.alert_email}
+      tasks:
+        - task_key: pos_ph
+          pipeline_task: {pipeline_id: "${resources.pipelines.pos_ph.id}"}
+        - task_key: pos_sg
+          pipeline_task: {pipeline_id: "${resources.pipelines.pos_sg.id}"}
+        - task_key: pos_de
+          pipeline_task: {pipeline_id: "${resources.pipelines.pos_de.id}"}
+        - task_key: pos_us
+          pipeline_task: {pipeline_id: "${resources.pipelines.pos_us.id}"}
+        - task_key: pos_global
+          depends_on: [{task_key: pos_ph}, {task_key: pos_sg}, {task_key: pos_de}, {task_key: pos_us}]
+          run_if: ALL_DONE # a failed country must not block the others' global numbers
+          pipeline_task: {pipeline_id: "${resources.pipelines.pos_global.id}"}
