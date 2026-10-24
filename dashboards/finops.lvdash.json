@@ -1,0 +1,708 @@
+{
+ "datasets": [
+  {
+   "name": "ds_runtime",
+   "displayName": "Compute runtime (estimate)",
+   "queryLines": [
+    "SELECT usage_date, env, component, data_country, kind, workload, compute_minutes, est_cost_usd\n",
+    "FROM pos_global.finops.runtime_daily WHERE usage_date >= date_sub(current_date(), 30)\n"
+   ]
+  },
+  {
+   "name": "ds_billing",
+   "displayName": "Billed usage (system.billing.usage)",
+   "queryLines": [
+    "SELECT usage_date, env, component, data_country, product, workload, dbus, list_cost_usd\n",
+    "FROM pos_global.finops.billing_daily WHERE usage_date >= date_sub(current_date(), 30)\n"
+   ]
+  },
+  {
+   "name": "ds_tags",
+   "displayName": "Tag coverage",
+   "queryLines": [
+    "SELECT usage_date, untagged_pct FROM pos_global.finops.tag_coverage\n"
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "name": "finops",
+   "displayName": "FinOps",
+   "pageType": "PAGE_TYPE_CANVAS",
+   "layoutVersion": "GRID_V1",
+   "layout": [
+    {
+     "widget": {
+      "name": "title",
+      "multilineTextboxSpec": {
+       "lines": [
+        "## FinOps: spend by environment, tag and pipeline\n"
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 1
+     }
+    },
+    {
+     "widget": {
+      "name": "subtitle",
+      "multilineTextboxSpec": {
+       "lines": [
+        "Budgets **alert**; policies and quotas **enforce** (serverless budget policy tags, cluster policy caps, warehouse max clusters, job max_concurrent_runs). Billed cost comes from `system.billing.usage`; this Free Edition workspace emits no billable usage, so the runtime-based **estimate** (compute minutes x USD 0.10) is shown next to it.\n"
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 1,
+      "width": 12,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "filter_env",
+      "queries": [
+       {
+        "name": "ds_runtime_env",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "env",
+           "expression": "`env`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "ds_billing_env",
+        "query": {
+         "datasetName": "ds_billing",
+         "fields": [
+          {
+           "name": "env",
+           "expression": "`env`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "filter-multi-select",
+       "encodings": {
+        "fields": [
+         {
+          "fieldName": "env",
+          "displayName": "Environment",
+          "queryName": "ds_runtime_env"
+         },
+         {
+          "fieldName": "env",
+          "displayName": "Environment",
+          "queryName": "ds_billing_env"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Environment"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 3,
+      "width": 12,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_est",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "sum(est_cost_usd)",
+           "expression": "SUM(`est_cost_usd`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(est_cost_usd)",
+         "displayName": "Estimated cost, 30 days (USD)",
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Estimated cost, 30 days (USD)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 5,
+      "width": 4,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_billed",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_billing",
+         "fields": [
+          {
+           "name": "sum(list_cost_usd)",
+           "expression": "SUM(`list_cost_usd`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(list_cost_usd)",
+         "displayName": "Billed list cost, 30 days (USD)",
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Billed list cost, 30 days (USD)",
+        "showDescription": true,
+        "description": "system.billing.usage (empty on Free Edition)"
+       }
+      }
+     },
+     "position": {
+      "x": 4,
+      "y": 5,
+      "width": 4,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_minutes",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "sum(compute_minutes)",
+           "expression": "SUM(`compute_minutes`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(compute_minutes)",
+         "displayName": "Serverless compute minutes",
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Serverless compute minutes"
+       }
+      }
+     },
+     "position": {
+      "x": 8,
+      "y": 5,
+      "width": 4,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "bar_env",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "env",
+           "expression": "`env`"
+          },
+          {
+           "name": "sum(est_cost_usd)",
+           "expression": "SUM(`est_cost_usd`)"
+          },
+          {
+           "name": "component",
+           "expression": "`component`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "env",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "env"
+        },
+        "y": {
+         "fieldName": "sum(est_cost_usd)",
+         "displayName": "USD (estimate)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "component",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "component"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Estimated cost by environment and component"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 8,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "bar_country",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "data_country",
+           "expression": "`data_country`"
+          },
+          {
+           "name": "sum(est_cost_usd)",
+           "expression": "SUM(`est_cost_usd`)"
+          },
+          {
+           "name": "kind",
+           "expression": "`kind`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "data_country",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "data_country"
+        },
+        "y": {
+         "fieldName": "sum(est_cost_usd)",
+         "displayName": "USD (estimate)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "kind",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "kind"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Estimated cost by data_country tag"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 8,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "ln_daily",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "usage_date",
+           "expression": "`usage_date`"
+          },
+          {
+           "name": "sum(est_cost_usd)",
+           "expression": "SUM(`est_cost_usd`)"
+          },
+          {
+           "name": "component",
+           "expression": "`component`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "usage_date",
+         "scale": {
+          "type": "temporal"
+         },
+         "displayName": "usage_date"
+        },
+        "y": {
+         "fieldName": "sum(est_cost_usd)",
+         "displayName": "USD (estimate)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "component",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "component"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Daily estimated cost by component"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 14,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "bar_billed",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_billing",
+         "fields": [
+          {
+           "name": "env",
+           "expression": "`env`"
+          },
+          {
+           "name": "sum(list_cost_usd)",
+           "expression": "SUM(`list_cost_usd`)"
+          },
+          {
+           "name": "product",
+           "expression": "`product`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "env",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "env"
+        },
+        "y": {
+         "fieldName": "sum(list_cost_usd)",
+         "displayName": "USD (list)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "product",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "product"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Billed list cost by environment and product",
+        "showDescription": true,
+        "description": "Populates in workspaces with billing (Premium / Enterprise)"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 14,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "tbl_workload",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_runtime",
+         "fields": [
+          {
+           "name": "usage_date",
+           "expression": "`usage_date`"
+          },
+          {
+           "name": "env",
+           "expression": "`env`"
+          },
+          {
+           "name": "component",
+           "expression": "`component`"
+          },
+          {
+           "name": "data_country",
+           "expression": "`data_country`"
+          },
+          {
+           "name": "kind",
+           "expression": "`kind`"
+          },
+          {
+           "name": "workload",
+           "expression": "`workload`"
+          },
+          {
+           "name": "compute_minutes",
+           "expression": "`compute_minutes`"
+          },
+          {
+           "name": "est_cost_usd",
+           "expression": "`est_cost_usd`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "usage_date",
+          "displayName": "Date"
+         },
+         {
+          "fieldName": "env",
+          "displayName": "Env"
+         },
+         {
+          "fieldName": "component",
+          "displayName": "Component"
+         },
+         {
+          "fieldName": "data_country",
+          "displayName": "Country"
+         },
+         {
+          "fieldName": "kind",
+          "displayName": "Kind"
+         },
+         {
+          "fieldName": "workload",
+          "displayName": "Pipeline / job"
+         },
+         {
+          "fieldName": "compute_minutes",
+          "displayName": "Minutes"
+         },
+         {
+          "fieldName": "est_cost_usd",
+          "displayName": "Est. USD"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Spend by pipeline / job (estimate)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 20,
+      "width": 12,
+      "height": 7
+     }
+    }
+   ]
+  }
+ ],
+ "uiSettings": {
+  "theme": {
+   "canvasBackgroundColor": {
+    "light": "#F7F9FA",
+    "dark": "#1F272D"
+   },
+   "widgetBackgroundColor": {
+    "light": "#FFFFFF",
+    "dark": "#11171C"
+   },
+   "widgetBorderColor": {
+    "light": "#FFFFFF",
+    "dark": "#11171C"
+   },
+   "fontColor": {
+    "light": "#11171C",
+    "dark": "#E8ECF0"
+   },
+   "selectionColor": {
+    "light": "#2272B4",
+    "dark": "#8ACAFF"
+   },
+   "visualizationColors": [
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#CC79A7",
+    "#56B4E9",
+    "#D55E00",
+    "#999999"
+   ],
+   "widgetHeaderAlignment": "LEFT"
+  }
+ }
+}

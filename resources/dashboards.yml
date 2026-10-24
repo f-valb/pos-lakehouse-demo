@@ -1,0 +1,14 @@
+resources:
+  dashboards:
+    pos_bi:
+      display_name: "POS sales, forecast and churn (${var.env})"
+      file_path: ../dashboards/pos_bi.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: pos_global
+      dataset_schema: ${var.env}_gold
+      embed_credentials: false # viewers query as themselves -> row filters + masks apply per user
+    finops:
+      display_name: "FinOps: spend by env, tag and pipeline"
+      file_path: ../dashboards/finops.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      embed_credentials: false

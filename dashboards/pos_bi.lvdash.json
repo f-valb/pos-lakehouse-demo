@@ -1,0 +1,818 @@
+{
+ "datasets": [
+  {
+   "name": "ds_freshness",
+   "displayName": "Freshness",
+   "queryLines": [
+    "SELECT country, data_as_of, latest_sale_utc,\n",
+    "  round((unix_timestamp(current_timestamp()) - unix_timestamp(data_as_of)) / 60, 1) AS minutes_behind,\n",
+    "  CASE WHEN (unix_timestamp(current_timestamp()) - unix_timestamp(data_as_of)) / 60 <= 15 THEN 'FRESH' ELSE 'STALE' END AS status\n",
+    "FROM data_as_of\n"
+   ]
+  },
+  {
+   "name": "ds_sales_hourly",
+   "displayName": "Sales by country and hour",
+   "queryLines": [
+    "SELECT country, txn_hour_utc, sum(net_sales_usd) AS net_sales_usd, sum(transactions) AS transactions, sum(units) AS units\n",
+    "FROM sales_by_country_hour\n",
+    "WHERE txn_hour_utc >= timestampadd(HOUR, -48, current_timestamp())\n",
+    "GROUP BY country, txn_hour_utc\n"
+   ]
+  },
+  {
+   "name": "ds_forecast",
+   "displayName": "Forecast vs actual",
+   "queryLines": [
+    "SELECT country, business_date, series, units FROM bi_forecast_vs_actual\n",
+    "WHERE business_date >= date_sub(current_date(), 30)\n"
+   ]
+  },
+  {
+   "name": "ds_churn",
+   "displayName": "Churn risk",
+   "queryLines": [
+    "SELECT country, as_of_date, risk_band, model_version, customers, avg_score FROM bi_churn_risk\n"
+   ]
+  },
+  {
+   "name": "ds_latency",
+   "displayName": "Latency per stage",
+   "queryLines": [
+    "SELECT country, records, poll_p50, poll_p95, bronze_p50, silver_p50, gold_p50, end_to_end_p50, end_to_end_p95, measured_at\n",
+    "FROM pipeline_latency ORDER BY country\n"
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "name": "overview",
+   "displayName": "Overview",
+   "pageType": "PAGE_TYPE_CANVAS",
+   "layoutVersion": "GRID_V1",
+   "layout": [
+    {
+     "widget": {
+      "name": "title",
+      "multilineTextboxSpec": {
+       "lines": [
+        "## Retail POS: sales, forecast and churn (BI stand-in for Power BI)\n"
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 1
+     }
+    },
+    {
+     "widget": {
+      "name": "subtitle",
+      "multilineTextboxSpec": {
+       "lines": [
+        "Global aggregated layer (no PII). Every number shows how fresh it is: see *data as of* per country. Store-level detail lives in the country catalogs, behind row filters.\n"
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 1,
+      "width": 12,
+      "height": 1
+     }
+    },
+    {
+     "widget": {
+      "name": "filter_country",
+      "queries": [
+       {
+        "name": "ds_freshness_country",
+        "query": {
+         "datasetName": "ds_freshness",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "ds_sales_hourly_country",
+        "query": {
+         "datasetName": "ds_sales_hourly",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "ds_forecast_country",
+        "query": {
+         "datasetName": "ds_forecast",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "ds_churn_country",
+        "query": {
+         "datasetName": "ds_churn",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "filter-multi-select",
+       "encodings": {
+        "fields": [
+         {
+          "fieldName": "country",
+          "displayName": "Country",
+          "queryName": "ds_freshness_country"
+         },
+         {
+          "fieldName": "country",
+          "displayName": "Country",
+          "queryName": "ds_sales_hourly_country"
+         },
+         {
+          "fieldName": "country",
+          "displayName": "Country",
+          "queryName": "ds_forecast_country"
+         },
+         {
+          "fieldName": "country",
+          "displayName": "Country",
+          "queryName": "ds_churn_country"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Country"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 2,
+      "width": 12,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_sales",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_sales_hourly",
+         "fields": [
+          {
+           "name": "sum(net_sales_usd)",
+           "expression": "SUM(`net_sales_usd`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(net_sales_usd)",
+         "displayName": "Net sales, last 48h (USD)",
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Net sales, last 48h (USD)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_txns",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_sales_hourly",
+         "fields": [
+          {
+           "name": "sum(transactions)",
+           "expression": "SUM(`transactions`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(transactions)",
+         "displayName": "Transactions, last 48h",
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Transactions, last 48h"
+       }
+      }
+     },
+     "position": {
+      "x": 3,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_behind",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_freshness",
+         "fields": [
+          {
+           "name": "max(minutes_behind)",
+           "expression": "MAX(`minutes_behind`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "max(minutes_behind)",
+         "displayName": "Max minutes behind (SLA 15)",
+         "format": {
+          "type": "number-plain",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Max minutes behind (SLA 15)",
+        "showDescription": true,
+        "description": "Oldest data_as_of across selected countries"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi_high_risk",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_churn",
+         "fields": [
+          {
+           "name": "sum(customers)",
+           "expression": "SUM(CASE WHEN `risk_band` = 'HIGH' THEN `customers` ELSE 0 END)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(customers)",
+         "displayName": "High churn-risk members",
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "High churn-risk members"
+       }
+      }
+     },
+     "position": {
+      "x": 9,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "tbl_freshness",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_freshness",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          },
+          {
+           "name": "data_as_of",
+           "expression": "`data_as_of`"
+          },
+          {
+           "name": "latest_sale_utc",
+           "expression": "`latest_sale_utc`"
+          },
+          {
+           "name": "minutes_behind",
+           "expression": "`minutes_behind`"
+          },
+          {
+           "name": "status",
+           "expression": "`status`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "country",
+          "displayName": "Country"
+         },
+         {
+          "fieldName": "data_as_of",
+          "displayName": "Data complete up to (UTC)"
+         },
+         {
+          "fieldName": "latest_sale_utc",
+          "displayName": "Latest sale (UTC)"
+         },
+         {
+          "fieldName": "minutes_behind",
+          "displayName": "Minutes behind"
+         },
+         {
+          "fieldName": "status",
+          "displayName": "Status"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Data as of (per country)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 7,
+      "width": 12,
+      "height": 4
+     }
+    },
+    {
+     "widget": {
+      "name": "ln_sales",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_sales_hourly",
+         "fields": [
+          {
+           "name": "txn_hour_utc",
+           "expression": "`txn_hour_utc`"
+          },
+          {
+           "name": "sum(net_sales_usd)",
+           "expression": "SUM(`net_sales_usd`)"
+          },
+          {
+           "name": "country",
+           "expression": "`country`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "line",
+       "encodings": {
+        "x": {
+         "fieldName": "txn_hour_utc",
+         "scale": {
+          "type": "temporal"
+         },
+         "displayName": "txn_hour_utc"
+        },
+        "y": {
+         "fieldName": "sum(net_sales_usd)",
+         "displayName": "Net sales (USD)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-currency",
+          "currencyCode": "USD",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "country",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "country"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Net sales per hour (USD)"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 11,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "ln_forecast",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_forecast",
+         "fields": [
+          {
+           "name": "business_date",
+           "expression": "`business_date`"
+          },
+          {
+           "name": "sum(units)",
+           "expression": "SUM(`units`)"
+          },
+          {
+           "name": "series",
+           "expression": "`series`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "line",
+       "encodings": {
+        "x": {
+         "fieldName": "business_date",
+         "scale": {
+          "type": "temporal"
+         },
+         "displayName": "business_date"
+        },
+        "y": {
+         "fieldName": "sum(units)",
+         "displayName": "Units",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "series",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "series"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Daily units: actual vs 14-day forecast",
+        "showDescription": true,
+        "description": "Before the live stream started, actuals are SIMULATED history (demo)."
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 11,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "bar_churn",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_churn",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          },
+          {
+           "name": "sum(customers)",
+           "expression": "SUM(`customers`)"
+          },
+          {
+           "name": "risk_band",
+           "expression": "`risk_band`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "country",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "country"
+        },
+        "y": {
+         "fieldName": "sum(customers)",
+         "displayName": "Members",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "color": {
+         "fieldName": "risk_band",
+         "scale": {
+          "type": "categorical"
+         },
+         "displayName": "risk_band"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Loyalty members by churn risk",
+        "showDescription": true,
+        "description": "Batch-scored daily with the @champion model per country"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 17,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "tbl_latency",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_latency",
+         "fields": [
+          {
+           "name": "country",
+           "expression": "`country`"
+          },
+          {
+           "name": "records",
+           "expression": "`records`"
+          },
+          {
+           "name": "poll_p50",
+           "expression": "`poll_p50`"
+          },
+          {
+           "name": "poll_p95",
+           "expression": "`poll_p95`"
+          },
+          {
+           "name": "bronze_p50",
+           "expression": "`bronze_p50`"
+          },
+          {
+           "name": "silver_p50",
+           "expression": "`silver_p50`"
+          },
+          {
+           "name": "gold_p50",
+           "expression": "`gold_p50`"
+          },
+          {
+           "name": "end_to_end_p50",
+           "expression": "`end_to_end_p50`"
+          },
+          {
+           "name": "end_to_end_p95",
+           "expression": "`end_to_end_p95`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "country",
+          "displayName": "Country"
+         },
+         {
+          "fieldName": "records",
+          "displayName": "Records"
+         },
+         {
+          "fieldName": "poll_p50",
+          "displayName": "Poll p50"
+         },
+         {
+          "fieldName": "poll_p95",
+          "displayName": "Poll p95"
+         },
+         {
+          "fieldName": "bronze_p50",
+          "displayName": "Bronze p50"
+         },
+         {
+          "fieldName": "silver_p50",
+          "displayName": "Silver p50"
+         },
+         {
+          "fieldName": "gold_p50",
+          "displayName": "Gold p50"
+         },
+         {
+          "fieldName": "end_to_end_p50",
+          "displayName": "E2E p50"
+         },
+         {
+          "fieldName": "end_to_end_p95",
+          "displayName": "E2E p95"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "End-to-end latency per stage (minutes, live records, last 60 min)"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 17,
+      "width": 6,
+      "height": 6
+     }
+    }
+   ]
+  }
+ ],
+ "uiSettings": {
+  "theme": {
+   "canvasBackgroundColor": {
+    "light": "#F7F9FA",
+    "dark": "#1F272D"
+   },
+   "widgetBackgroundColor": {
+    "light": "#FFFFFF",
+    "dark": "#11171C"
+   },
+   "widgetBorderColor": {
+    "light": "#FFFFFF",
+    "dark": "#11171C"
+   },
+   "fontColor": {
+    "light": "#11171C",
+    "dark": "#E8ECF0"
+   },
+   "selectionColor": {
+    "light": "#2272B4",
+    "dark": "#8ACAFF"
+   },
+   "visualizationColors": [
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#CC79A7",
+    "#56B4E9",
+    "#D55E00",
+    "#999999"
+   ],
+   "widgetHeaderAlignment": "LEFT"
+  }
+ }
+}

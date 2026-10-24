@@ -1,0 +1,63 @@
+# DBSQL alerts (email). Lakehouse-side observability; the ingestion side alarms in CloudWatch.
+variables:
+  alert_pause_status:
+    description: Alerts poll the warehouse; keep them off where nothing runs
+    default: UNPAUSED
+
+resources:
+  alerts:
+    data_freshness:
+      display_name: "[${bundle.target}] POS data stale (> 15 min behind)"
+      query_text: >
+        SELECT max((unix_timestamp(current_timestamp()) - unix_timestamp(data_as_of)) / 60) AS minutes_behind
+        FROM pos_global.${var.env}_gold.data_as_of
+      warehouse_id: ${var.warehouse_id}
+      evaluation:
+        comparison_operator: GREATER_THAN
+        source: {name: minutes_behind, display: minutes_behind}
+        threshold: {value: {double_value: 15}}
+        empty_result_state: TRIGGERED
+        notification:
+          notify_on_ok: true
+          subscriptions: [{user_email: "${var.alert_email}"}]
+      schedule:
+        pause_status: ${var.alert_pause_status}
+        quartz_cron_schedule: "0 0/15 * * * ?"
+        timezone_id: UTC
+
+    ml_drift:
+      display_name: "[${bundle.target}] ML drift / data-quality breach"
+      query_text: >
+        SELECT count(*) AS breaches FROM pos_global.${var.env}_ops.ml_monitoring_metrics
+        WHERE breached AND run_ts > current_timestamp() - INTERVAL 1 DAY
+      warehouse_id: ${var.warehouse_id}
+      evaluation:
+        comparison_operator: GREATER_THAN
+        source: {name: breaches, display: breaches}
+        threshold: {value: {double_value: 0}}
+        notification:
+          notify_on_ok: false
+          subscriptions: [{user_email: "${var.alert_email}"}]
+      schedule:
+        pause_status: ${var.alert_pause_status}
+        quartz_cron_schedule: "0 10 * * * ?"
+        timezone_id: UTC
+
+    quarantine_spike:
+      display_name: "[${bundle.target}] Quarantine rate > 2% in the last hour"
+      query_text: >
+        SELECT 100 * q.n / greatest(s.n, 1) AS quarantine_pct FROM
+          (SELECT count(*) n FROM pos_ph.${var.env}_silver.pos_lines_quarantine WHERE _quarantined_ts > current_timestamp() - INTERVAL 1 HOUR) q,
+          (SELECT count(*) n FROM pos_ph.${var.env}_silver.pos_lines WHERE _silver_ts > current_timestamp() - INTERVAL 1 HOUR) s
+      warehouse_id: ${var.warehouse_id}
+      evaluation:
+        comparison_operator: GREATER_THAN
+        source: {name: quarantine_pct, display: quarantine_pct}
+        threshold: {value: {double_value: 2}}
+        notification:
+          notify_on_ok: false
+          subscriptions: [{user_email: "${var.alert_email}"}]
+      schedule:
+        pause_status: ${var.alert_pause_status}
+        quartz_cron_schedule: "0 5 * * * ?"
+        timezone_id: UTC
