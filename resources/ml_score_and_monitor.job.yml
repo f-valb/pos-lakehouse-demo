@@ -11,7 +11,9 @@ resources:
         timezone_id: UTC
         pause_status: ${var.pause_status}
       parameters:
-        - name: countries_json
+        # Not "countries_json": parent job parameters are passed down to run_job_task children
+        # and would override the drift-derived countries_json given to ml_train below.
+        - name: score_countries_json
           default: ${var.countries_json}
         - name: inject_drift
           default: ""
@@ -23,7 +25,7 @@ resources:
       tasks:
         - task_key: score_features
           for_each_task:
-            inputs: "{{job.parameters.countries_json}}"
+            inputs: "{{job.parameters.score_countries_json}}"
             concurrency: 2
             task:
               task_key: score_features_country
@@ -35,7 +37,7 @@ resources:
         - task_key: batch_score
           depends_on: [{task_key: score_features}]
           for_each_task:
-            inputs: "{{job.parameters.countries_json}}"
+            inputs: "{{job.parameters.score_countries_json}}"
             concurrency: 2
             task:
               task_key: batch_score_country

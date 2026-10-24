@@ -44,14 +44,14 @@ The checks were run in this workspace on 2026-10-24 and 2026-10-25 (UTC). The co
 
 | # | Criterion | Result | Evidence |
 |---|---|---|---|
-| 1 | The mock API crashes when hammered directly; the poller does not crash it | **PASS** | `mock_pos_api.hammer` (30 concurrent): OOM crash, then 500 on every request. The poller ran for hours with `crashes=0` and max 4 in flight; at peak the API returned 503s but never crashed (`scripts/failure_demo.py --step peak`). Unit tests cover normal and peak |
+| 1 | The mock API crashes when hammered directly; the poller does not crash it | **PASS** | `mock_pos_api.hammer` (30 concurrent): OOM crash, then 500 on every request. The poller ran for hours with `crashes=0` and max 4 in flight. At peak, with store traffic taking capacity, the API returned 503s at an 18–23% error rate; AIMD backed off, windows shrank (PH 180→120 s, SG 420→240 s) and the API never crashed (`crashes=0`) |
 | 2 | Re-running the same window produces no duplicate rows in silver | **PASS** | `scripts/dedupe_check.py`: 2 extra pulls of a window → bronze +80,572 rows, silver unchanged at 20,093 rows = 20,093 distinct keys, and 302 late voids applied. Repeated on staging by `tests/integration` |
 | 3 | Killing the poller mid-run and retrying produces the same S3 files | **PASS** | `scripts/idempotency_check.py`: SIGKILL with 6/24 files written, SQS redelivery, resume → all 24 keys, SHA-256 identical to a clean run, DLQ empty |
 | 4 | End-to-end time under 15 min at demo volume, per stage | **PASS** | `pos_global.dev_gold.pipeline_latency`: e2e p95 11.9–12.5 min (p50 7.7–10.3). Stages: poll p50 2.6–4.3 min, bronze 1.1–2.2, silver about 0.1, gold 3.5–4.2 (gold includes the wait for the next 5-min refresh). The BI refresh stage isn't measured (no Power BI) |
 | 5 | A `pos_ph` manager sees only PH rows; `global_exec` sees only the aggregated layer | **PASS** | `governance/rls_check.py`: 10/10 checks as two real service principals (output below) |
 | 6 | Bad rows land in quarantine, not silver | **PASS** | All 5 defect types are quarantined with their rule names (`valid_qty`, `valid_txn_ts`, `valid_price`, `known_tender`, `has_store`). Integration test: silver + distinct quarantined = distinct pulled lines |
-| 7 | A new model version flows challenger → validation → champion, and an alias rollback works | **PASS** | `ml_train`: v2 beat v1 0.8596 vs 0.8193 on the same holdout → champion. US v4 was rejected (0.8666 vs 0.8898). `ml_rollback` moved `@champion` back to the tagged previous version (see the evidence log) |
-| 8 | Injected drift triggers the monitor and an alert | see log | `ml_score_and_monitor --params inject_drift=ph`: the PH spend and card-share PSI breach, a retrain of PH only is triggered, and the `ml_drift` DBSQL alert condition is true |
+| 7 | A new model version flows challenger → validation → champion, and an alias rollback works | **PASS** | `ml_train`: v2 beat v1 0.8596 vs 0.8193 on the same holdout → champion. US v4 was rejected (0.8666 vs 0.8898) and US kept v2. `ml_rollback --params country=ph` moved `@champion` from v8 to v7 (the `previous_champion` tag), tagged v8 `rolled_back`, and the next scoring run used v7 (`scripts/model_versions.py`) |
+| 8 | Injected drift triggers the monitor and an alert | **PASS** | With no injection, max PSI was 0.03 and the retrain task was skipped. With `inject_drift=ph`, only PH breached (avg basket PSI 2.34, spend 1.0–1.1, card share 0.96); the condition task triggered `ml_train`, and the `ml_drift` DBSQL alert has breaches to report. The freshness alert also fired for real (TRIGGERED, email) during the SG outage |
 | 9 | CI runs on a PR and the prod deploy waits for manual approval | **NOT RUN** | The workflows are written and the bundle validates for every target. Running them needs a GitHub repo, a `prod` environment with required reviewers, and an OIDC federation policy. Not done because it publishes the repo |
 | 10 | The FinOps dashboard shows spend by environment and tag | **PARTIAL** | It shows *estimated* spend by env, component, country and workload from `system.lakeflow`. Billed spend (`system.billing.usage`) is empty on Free Edition |
 | 11 | The README lists every substitution and every gap versus production | **PASS** | This file, the table above |
@@ -70,7 +70,7 @@ The checks were run in this workspace on 2026-10-24 and 2026-10-25 (UTC). The co
 | Rollback | `databricks bundle run ml_rollback -t dev --params country=ph` |
 | Drift | `databricks bundle run ml_score_and_monitor -t dev --params inject_drift=ph` |
 | Staging integration | `databricks bundle deploy -t staging && uv run pytest -m integration tests/integration --env staging` |
-| Failure injection | `uv run python scripts/failure_demo.py` |
+| Failure injection | `uv run python scripts/failure_demo.py`. Outage: SG breaker open → gaps, `pos-SG-circuit-open` ALARM. Restore: one probe, circuit closed within about 2 min, 5 gaps drained newest-first, alarm cleared |
 
 ## How to run
 

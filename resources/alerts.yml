@@ -26,7 +26,7 @@ resources:
         timezone_id: UTC
 
     ml_drift:
-      display_name: "[${bundle.target}] ML drift / data-quality breach"
+      display_name: "[${bundle.target}] ML drift or data-quality breach"
       query_text: >
         SELECT count(*) AS breaches FROM pos_global.${var.env}_ops.ml_monitoring_metrics
         WHERE breached AND run_ts > current_timestamp() - INTERVAL 1 DAY

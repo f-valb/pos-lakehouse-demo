@@ -98,7 +98,8 @@ def test_planner_records_gaps_while_circuit_open_then_backfills_newest_first():
     p.tick()
     assert len(drain(live)) == 1
 
-    store.put(feedback_key("SG"), {"window_s": 300, "circuit": {"state": "open"}})
+    store.put(feedback_key("SG"), {"window_s": 300, "updated_at": t[0],
+                                   "circuit": {"state": "open", "remaining_open_s": 10**6}})  # long cooldown
     for _ in range(6):  # 30 min outage
         t[0] += 300
         p.tick()
@@ -216,3 +217,22 @@ def test_kill_mid_run_and_retry_produces_identical_objects(api_state):
     assert 0 < partial < len(tasks) or partial == len(tasks)
     assert digest(clean) == digest(crashed)
     assert len(clean.objects) == len(tasks)
+
+
+def test_planner_sends_one_probe_after_cooldown():
+    t = [HIST.timestamp()]
+    s = settings(regions=("SG",), live_lag_seconds=0)
+    p, store, live, back = make_planner(s, lambda: t[0])
+    p.tick()
+    drain(live)
+    store.put(feedback_key("SG"), {"window_s": 60, "updated_at": t[0],
+                                   "circuit": {"state": "open", "remaining_open_s": 120}})
+    t[0] += 60
+    p.tick()
+    assert drain(live) == []  # still cooling down: nothing reaches the dead region
+    t[0] += 180
+    p.tick()
+    probes = drain(live)
+    assert len(probes) == 1  # exactly one half-open probe, the newest window
+    gaps = [store.get(k) for k in store.list("gaps/SG/")]
+    assert all(g["end"] <= probes[0].window_start for g in gaps)

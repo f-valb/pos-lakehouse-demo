@@ -6,7 +6,9 @@ Per region it:
 2. Plans one *re-pull* of every window ~21 min after it closed. The API has no "updated since"
    filter, so re-pulling is the only way to see late voids. Re-pulls go to the backfill queue.
 3. If the region's circuit is open, it does *not* send live tasks (they would only fail and
-   add load); those windows are recorded as gaps instead.
+   add load); those windows are recorded as gaps instead. Once the breaker's cooldown has
+   elapsed it sends exactly ONE probe (the newest window), which the poller uses as the
+   half-open trial. Without it nobody would ever call the region again.
 4. When the circuit is closed again, it backfills gaps newest-first, at most
    `backfill_per_tick` tasks per tick, into the low-priority queue.
 """
@@ -76,6 +78,12 @@ class Planner:
             wm += timedelta(seconds=size)
 
         sent_live, new_gaps = 0, 0
+        c = fb.get("circuit", {})
+        probe_due = circuit == "open" and self.clock() >= fb.get("updated_at", 0) + c.get("remaining_open_s", 0)
+        if probe_due and windows:
+            s, e = windows.pop()
+            self.live_q.send(self._task(region, s, e, "live", now))
+            sent_live = 1
         if circuit == "open":
             for s, e in windows:
                 self.store.put(gap_key(region, s, e), {"start": iso(s), "end": iso(e), "reason": "circuit_open"})
