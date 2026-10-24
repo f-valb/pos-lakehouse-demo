@@ -11,7 +11,7 @@ dependencies = [
     "pyarrow>=17",
     "boto3>=1.35",
     "databricks-sdk>=0.50",
-    "pandas>=2.2",
+    "pandas>=2.2,<3",  # pyspark 3.5 (local tests) is not pandas-3 compatible
     "numpy>=1.26",
 ]
 
@@ -39,7 +39,7 @@ ignore = ["E501", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 # Databricks notebooks / pipeline sources get `spark` and `dbutils` injected at runtime.
-"pipelines/transformations/*.py" = ["F821"]
+"pipelines/**/transformations/*.py" = ["F821"]
 "ml/*.py" = ["F821"]
 "governance/*.py" = ["F821"]
 "finops/*.py" = ["F821"]
