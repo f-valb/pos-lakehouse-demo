@@ -1,0 +1,50 @@
+# main: deploy to staging -> integration tests on staging data -> MANUAL APPROVAL -> deploy to prod.
+# The approval gate is the GitHub environment "prod" with required reviewers (Settings > Environments).
+# Deploy code, not models: each environment trains its own models on its own data after deploy.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false # never cancel a half-finished prod deploy
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+  DATABRICKS_AUTH_TYPE: github-oidc
+  DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - uses: databricks/setup-cli@v1.22.1
+      - run: uv sync --frozen
+      - name: Deploy to staging
+        run: databricks bundle deploy -t staging
+      - name: Integration tests on staging (fixture data -> pipeline -> assertions)
+        run: uv run pytest -q -m integration tests/integration --env staging
+
+  prod:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: prod # <- required reviewers: the run waits here for manual approval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.22.1
+      - name: Deploy to prod
+        run: databricks bundle deploy -t prod
+      - name: Smoke test prod (pipelines exist, last refresh healthy)
+        run: databricks bundle summary -t prod

@@ -1,0 +1,10 @@
+country                                   = "PH"
+env                                       = "prod"
+aws_region                                = "ap-southeast-1" # nearest region with the required services; confirm residency rules
+pos_api_url                               = "https://pos-legacy.internal.example"
+poller_image_uri                          = "<account>.dkr.ecr.ap-southeast-1.amazonaws.com/pos-ph-prod-ingestion:<git-sha>"
+max_api_concurrency                       = 4
+alarm_email                               = "data-platform-oncall@example.com"
+databricks_storage_credential_external_id = "<from Databricks storage credential>"
+vpc_subnet_ids                            = ["subnet-..."]
+vpc_security_group_ids                    = ["sg-..."]

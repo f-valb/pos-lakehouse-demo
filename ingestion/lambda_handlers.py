@@ -26,7 +26,7 @@ from ingestion.planner import Planner
 from ingestion.poller import Poller
 from ingestion.queues import Message, SqsQueue
 from ingestion.sinks import S3Sink
-from ingestion.state import S3Store
+from ingestion.state import DynamoStore
 
 
 def _settings() -> Settings:
@@ -34,10 +34,14 @@ def _settings() -> Settings:
     return Settings(aws_endpoint=None)
 
 
+def _store(s: Settings) -> DynamoStore:
+    return DynamoStore(client("dynamodb", s), os.environ["CONTROL_TABLE"])
+
+
 def planner_handler(event, context):
     s = _settings()
     sqs = client("sqs", s)
-    p = Planner(s, S3Store(client("s3", s), s.control_bucket), SqsQueue(sqs, s.live_queue), SqsQueue(sqs, s.backfill_queue))
+    p = Planner(s, _store(s), SqsQueue(sqs, s.live_queue), SqsQueue(sqs, s.backfill_queue))
     return p.tick()
 
 
@@ -57,7 +61,7 @@ class _NoopQueue:
 def poller_handler(event, context):
     s = _settings()
     q = _NoopQueue(s.live_queue)
-    poller = Poller(s, q, q, S3Store(client("s3", s), s.control_bucket),
+    poller = Poller(s, q, q, _store(s),
                     [S3Sink(client("s3", s), s.raw_bucket)], Metrics(client("cloudwatch", s)))
 
     async def go():

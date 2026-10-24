@@ -1,0 +1,7 @@
+# Lambda container image for the planner + poller (same code as local mode).
+#   docker build -f infra/docker/Dockerfile.ingestion -t pos-ingestion .
+FROM public.ecr.aws/lambda/python:3.11
+RUN pip install --no-cache-dir "httpx>=0.27" "pyarrow>=17" "boto3>=1.35"
+COPY common/ ${LAMBDA_TASK_ROOT}/common/
+COPY ingestion/ ${LAMBDA_TASK_ROOT}/ingestion/
+CMD ["ingestion.lambda_handlers.poller_handler"]

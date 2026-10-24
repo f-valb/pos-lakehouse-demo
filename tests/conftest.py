@@ -18,6 +18,10 @@ if "JAVA_HOME" not in os.environ and _JDK.exists():
     os.environ["JAVA_HOME"] = str(_JDK)
 
 
+def pytest_addoption(parser):
+    parser.addoption("--env", default="staging", help="deployed environment for integration tests")
+
+
 @pytest.fixture(scope="session")
 def spark():
     pyspark = pytest.importorskip("pyspark")

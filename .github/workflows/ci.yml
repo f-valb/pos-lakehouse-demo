@@ -1,0 +1,61 @@
+# Pull request: lint + unit tests (incl. local Spark), bundle validation for every target,
+# then deploy to dev. Nothing reaches staging/prod from a PR.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # GitHub OIDC -> Databricks workload identity federation (no stored secrets)
+
+env:
+  DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+  DATABRICKS_AUTH_TYPE: github-oidc
+  DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-java@v4 # local Spark for the translation tests
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check .
+      - name: Unit tests
+        run: uv run pytest -q
+
+  validate:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [dev, staging, prod]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.22.1
+      - name: bundle validate (${{ matrix.target }})
+        run: databricks bundle validate -t ${{ matrix.target }}
+
+  deploy-dev:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.22.1
+      - name: Deploy to dev
+        run: databricks bundle deploy -t dev

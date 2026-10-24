@@ -56,3 +56,33 @@ class S3Store:
             if not resp.get("IsTruncated"):
                 return sorted(keys)
             token = resp["NextContinuationToken"]
+
+
+class DynamoStore:
+    """Prod control store (infra/terraform/aws: <prefix>-ingestion-control, hash key `key`)."""
+
+    def __init__(self, dynamodb, table: str):
+        self.ddb, self.table = dynamodb, table
+
+    def get(self, key: str) -> dict | None:
+        item = self.ddb.get_item(TableName=self.table, Key={"key": {"S": key}}).get("Item")
+        return json.loads(item["value"]["S"]) if item else None
+
+    def put(self, key: str, value: dict) -> None:
+        self.ddb.put_item(TableName=self.table, Item={"key": {"S": key}, "value": {"S": json.dumps(value, sort_keys=True)}})
+
+    def delete(self, key: str) -> None:
+        self.ddb.delete_item(TableName=self.table, Key={"key": {"S": key}})
+
+    def list(self, prefix: str) -> list[str]:
+        keys, start = [], None
+        while True:
+            kw = {"TableName": self.table, "ProjectionExpression": "#k", "ExpressionAttributeNames": {"#k": "key"},
+                  "FilterExpression": "begins_with(#k, :p)", "ExpressionAttributeValues": {":p": {"S": prefix}}}
+            if start:
+                kw["ExclusiveStartKey"] = start
+            resp = self.ddb.scan(**kw)
+            keys += [i["key"]["S"] for i in resp.get("Items", [])]
+            start = resp.get("LastEvaluatedKey")
+            if not start:
+                return sorted(keys)

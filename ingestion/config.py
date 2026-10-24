@@ -48,8 +48,9 @@ class Settings:
     breaker_cooldown_s: float = float(_env("BREAKER_COOLDOWN_S", "30"))
 
     def raw_bucket(self, region: str) -> str:
-        # One bucket per country: in prod each lives in that country's AWS account/region.
-        return f"pos-raw-{region.lower()}"
+        # One bucket per country: in prod each lives in that country's AWS account/region and the
+        # stack passes its name in RAW_BUCKET (one country per deployment).
+        return os.environ.get("RAW_BUCKET") or f"pos-raw-{region.lower()}"
 
     def volume_root(self, region: str) -> str:
         return f"/Volumes/pos_{region.lower()}/{self.env}_bronze/landing"
