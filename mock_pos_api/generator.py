@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import math
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
@@ -215,14 +215,3 @@ def window_lines(region_code: str, start: datetime, end: datetime, now: datetime
 def header() -> str:
     return "|".join(LEGACY_COLUMNS)
 
-
-def floor_minute(dt: datetime) -> datetime:
-    return dt.replace(second=0, microsecond=0)
-
-
-def minutes(start: datetime, end: datetime) -> list[datetime]:
-    out, m = [], floor_minute(start)
-    while m < end:
-        out.append(m)
-        m += timedelta(minutes=1)
-    return out

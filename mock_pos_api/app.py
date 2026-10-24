@@ -9,7 +9,8 @@ late void is to re-pull the window. The service degrades the way the real one do
 * in-flight requests above `soft_limit` -> slow responses, random 503s and truncated bodies
 * in-flight requests above `hard_limit` -> the process "crashes": every request returns 500
   for `crash_seconds` (simulates the JVM falling over and being restarted)
-* peak mode: store traffic eats capacity, so both limits drop and latency doubles
+* peak mode: store traffic eats capacity: limits drop, latency doubles and the stores' own
+  requests occupy `peak_background_load` concurrency slots, so even a polite client sees 503s
 * per-region outage switch for the failure-injection demo
 
 Admin endpoints (demo only): POST /admin/peak, POST /admin/fail, POST /admin/reset, GET /admin/stats
@@ -43,6 +44,7 @@ class ApiState:
     peak_hard_limit: int = 6
     crash_seconds: float = 20.0
     peak: bool = False
+    peak_background_load: int = 2
     failing_regions: dict[str, str] = field(default_factory=dict)  # region -> "error" | "timeout"
     in_flight: int = 0
     max_in_flight: int = 0
@@ -98,7 +100,8 @@ async def transactions(
     state.max_in_flight = max(state.max_in_flight, state.in_flight)
     try:
         soft, hard = state.limits
-        if state.in_flight > hard:
+        load = state.in_flight + (state.peak_background_load if state.peak else 0)
+        if load > hard:
             state.crashed_until = time.time() + state.crash_seconds
             state.crashes += 1
             _record(500)
@@ -116,7 +119,7 @@ async def transactions(
 
         lines = await asyncio.to_thread(window_lines, region, start, end, state.now(), state.total_rpm)
 
-        overloaded = state.in_flight > soft
+        overloaded = load > soft
         latency = 0.05 + len(lines) * 0.00002
         if state.peak:
             latency *= 2
