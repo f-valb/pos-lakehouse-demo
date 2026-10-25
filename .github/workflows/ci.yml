@@ -13,12 +13,14 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write # GitHub OIDC -> Databricks workload identity federation (no stored secrets)
 
+# Databricks OAuth M2M as the CI service principal (sp-pos-cicd). PROD: use GitHub OIDC workload
+# identity federation instead (no stored secret; needs an account-level federation policy, which
+# Free Edition does not expose). Set up by scripts/setup_ci.sh.
 env:
   DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
-  DATABRICKS_AUTH_TYPE: github-oidc
   DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+  DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
 
 jobs:
   test:

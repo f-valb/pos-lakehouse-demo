@@ -2,6 +2,7 @@
 # every target deploys the same pipelines/jobs; models are trained in each environment on
 # that environment's data.
 #
+# Auth: locally the DEFAULT ~/.databrickscfg profile, in CI DATABRICKS_HOST/CLIENT_ID/CLIENT_SECRET.
 # Demo: all three targets point at the same Free Edition workspace and are separated by
 # UC schema prefix (dev_ / staging_ / prod_). PROD: one workspace per environment (and per
 # country), each target with its own host and a service principal as run_as.
@@ -36,8 +37,6 @@ targets:
   dev:
     default: true
     mode: development # prefixes resource names with [dev <user>], pauses schedules
-    workspace:
-      profile: DEFAULT
     variables:
       env: dev
     presets:
@@ -47,8 +46,7 @@ targets:
   staging:
     mode: production
     workspace:
-      profile: DEFAULT
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/staging
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/staging
     variables:
       env: staging
       pause_status: PAUSED # staging runs on demand from CI integration tests
@@ -63,8 +61,7 @@ targets:
   prod:
     mode: production
     workspace:
-      profile: DEFAULT
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/prod
     variables:
       env: prod
       pause_status: PAUSED # demo: keep prod idle to stay cheap; set UNPAUSED for a real rollout

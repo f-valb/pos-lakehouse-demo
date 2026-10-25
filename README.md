@@ -36,7 +36,7 @@ scripts/        dbsql runner, acceptance checks, failure demo, dashboard builder
 | ML history | **Simulated 180-day history** (`ml/ml_lib/history.py`), consistent with the live stream through shared customer profiles (`common/customers.py`) | Real silver/gold history | The live loyalty share is small (about 0.05% of transactions) so that live behaviour matches the simulated member base |
 | FinOps | `system.billing.usage` views and dashboard panels exist but are **empty**, because Free Edition emits no billable usage. A **runtime-based estimate** from `system.lakeflow` (compute minutes × USD 0.10, labelled as an estimate) is shown next to them | `system.billing.usage` × `list_prices`, serverless budget policies, budgets | Budget policies, budgets and cluster policies are Terraform only (no account console on Free Edition) |
 | Monitoring | Custom PSI + data-quality job (alerting and retrain trigger) **and** Lakehouse Monitoring (inference-log and snapshot monitors) | Same | None |
-| CI/CD | Workflows written. Staging deploy and integration tests were **run locally** with the same commands | GitHub Actions with OIDC federation to a Databricks SP; the `prod` environment requires reviewers | Running the workflows needs a GitHub repo plus environment and OIDC setup (see below) |
+| CI/CD | GitHub Actions on a private repo. OAuth M2M as service principal `sp-pos-cicd`; the `prod` environment requires a reviewer | GitHub OIDC federation to a Databricks SP (no stored secret), plus required reviewers | OIDC needs an account-level federation policy, which Free Edition doesn't expose |
 
 ## Acceptance criteria
 
@@ -107,11 +107,10 @@ databricks bundle run ml_score_and_monitor -t dev
 uv run python ml/setup_lakehouse_monitor.py --country ph --env dev
 ```
 
-**CI/CD setup** (not done; it needs your GitHub repo):
-1. Push to GitHub.
-2. Create environments `dev`, `staging` and `prod`. Add **required reviewers** to `prod`.
-3. Set the repo variables `DATABRICKS_HOST` and `DATABRICKS_CLIENT_ID` (a deployment service principal).
-4. Add a federation policy on that SP that trusts `token.actions.githubusercontent.com` for this repo.
+**CI/CD setup:**
+1. The repo lives on GitHub with environments `dev`, `staging` and `prod`. `prod` has a **required reviewer**.
+2. Run `./scripts/setup_ci.sh <owner/repo>` once, as a workspace admin. It gives the CI service principal `sp-pos-cicd` workspace access, the `data_platform` group and warehouse use. It sets the repo variables `DATABRICKS_HOST` and `DATABRICKS_CLIENT_ID`, and stores an OAuth secret as `DATABRICKS_CLIENT_SECRET` without printing it.
+3. In production, replace the secret with GitHub OIDC workload identity federation: an account-level federation policy on the SP that trusts `token.actions.githubusercontent.com`. Free Edition has no account console, so the demo uses OAuth M2M.
 
 ## Cost
 
