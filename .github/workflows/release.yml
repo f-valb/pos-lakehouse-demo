@@ -1,5 +1,8 @@
 # main: deploy to staging -> integration tests on staging data -> MANUAL APPROVAL -> deploy to prod.
-# The approval gate is the GitHub environment "prod" with required reviewers (Settings > Environments).
+# Approval gate: the `approve` job opens an issue and waits for an approver to comment "approve"
+# (or "deny"). GitHub's built-in environment "required reviewers" is not available for private repos
+# on the Free plan; on Pro/Team/Enterprise, delete the approve job and add reviewers to the "prod"
+# environment instead. The "prod" environment already restricts deploys to the main branch.
 # Deploy code, not models: each environment trains its own models on its own data after deploy.
 name: release
 
@@ -39,10 +42,26 @@ jobs:
       - name: Integration tests on staging (fixture data -> pipeline -> assertions)
         run: uv run pytest -q -m integration tests/integration --env staging
 
-  prod:
+  approve:
     needs: staging
     runs-on: ubuntu-latest
-    environment: prod # <- required reviewers: the run waits here for manual approval
+    timeout-minutes: 65
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for an approver's "approve" comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVERS: ${{ vars.PROD_APPROVERS || github.repository_owner }}
+          APPROVAL_TIMEOUT_MIN: "60"
+        run: bash .github/scripts/wait_for_approval.sh
+
+  prod:
+    needs: approve
+    runs-on: ubuntu-latest
+    environment: prod # branch policy: main only
     steps:
       - uses: actions/checkout@v4
       - uses: databricks/setup-cli@v1.22.1

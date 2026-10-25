@@ -84,7 +84,7 @@ uv run python scripts/failure_demo.py --step restore --minutes 3
 
 ## 9:30 – 10:00  Ops and FinOps, wrap-up
 
-- **DevOps:** the PR workflow runs lint, unit tests including local Spark, and bundle validate, then deploys to dev. Main deploys to staging, runs the integration tests, then waits at the **`prod` environment for manual approval** before deploying to prod.
+- **DevOps:** the PR workflow runs lint, unit tests including local Spark, and bundle validate, then deploys to dev. Main deploys to staging, runs the integration tests, then opens an **approval issue** and waits for an `approve` comment before deploying to prod.
 - **FinOps dashboard:** spend by env, component and country tag.
   - Budgets *alert*; policies and quotas *enforce* (serverless budget policy, cluster policy, warehouse max clusters, `max_concurrent_runs`).
   - Free Edition emits no billing, so the billed panel is empty, and the runtime estimate next to it is labelled as an estimate.
