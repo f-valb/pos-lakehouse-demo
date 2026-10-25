@@ -1,5 +1,7 @@
 # POS → Lakehouse demo
 
+[![ci](https://github.com/f-valb/pos-lakehouse-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/f-valb/pos-lakehouse-demo/actions/workflows/ci.yml) [![release](https://github.com/f-valb/pos-lakehouse-demo/actions/workflows/release.yml/badge.svg)](https://github.com/f-valb/pos-lakehouse-demo/actions/workflows/release.yml)
+
 This is a scaled-down but architecturally faithful build of a global retailer's POS-to-lakehouse platform. It moves data from a fragile, pull-only legacy POS API into a medallion lakehouse on Databricks, with per-country data residency, BI and ML. End-to-end latency is 15 minutes, down from 24 hours.
 
 - [`docs/architecture.md`](docs/architecture.md): diagrams, design decisions and trade-offs, and scaling to 100M records per hour.
